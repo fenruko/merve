@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Who Are You?</title>
+  <!-- Favicon to prevent 404 error -->
+  <link rel="icon" href="data:,">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase SDK CDN -->
+  <!-- Firebase Compatibility SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 </head>
@@ -25,11 +27,12 @@
     const firebaseConfig = {
       apiKey: "AIzaSyDJ-bZC46FWBzevyhTA_H1Lq9FJ1_elNnw",
       authDomain: "location-442c7.firebaseapp.com",
+      databaseURL: "https://location-442c7-default-rtdb.firebaseio.com",
       projectId: "location-442c7",
       storageBucket: "location-442c7.firebasestorage.app",
       messagingSenderId: "845259581953",
       appId: "1:845259581953:web:4c9c0ea03c70f5419eee00"
-    };
+   };
 
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
@@ -115,7 +118,7 @@
           output.innerHTML = `
             <strong>Device Data:</strong><br>
             Timestamp: ${data.timestamp}<br>
-            Online: ${data.online ? 'Yes' : 'No'}<br>
+            Online: ${data.online ? 'Yes' : 'No'}<  <br>
             User Agent: ${data.userAgent}<br>
             ${data.battery ? `Battery: ${data.battery.level}% (${data.battery.charging ? 'Charging' : 'Not Charging'})<br>` : ''}
             ${data.location ? `Location: Lat ${data.location.latitude}, Lon ${data.location.longitude} (Accuracy: ${data.location.accuracy}m)<br>` : ''}
