@@ -42,12 +42,8 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // Generate or retrieve device ID
-    let deviceId = localStorage.getItem('deviceId');
-    if (!deviceId) {
-      deviceId = 'device-' + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem('deviceId', deviceId);
-    }
+    // Generate device ID for Ali
+    const aliDeviceId = 'ali-device';
 
     // Collect device data
     async function collectDeviceData() {
@@ -108,33 +104,34 @@
       return data;
     }
 
-    // Store data for Ali
+    // Store data for Ali - always save to the same aliDeviceId
     document.getElementById('aliButton').addEventListener('click', async () => {
       const output = document.getElementById('output');
       output.textContent = 'Collecting data...';
       try {
         const data = await collectDeviceData();
-        await database.ref('devices/' + deviceId).set(data);
-        output.textContent = 'Your data has been recorded.';
-        console.log('Data saved to Firebase:', data);
+        await database.ref('devices/' + aliDeviceId).set(data);
+        output.textContent = 'Your data has been recorded as Ali.';
+        console.log('Data saved to Firebase for Ali:', data);
       } catch (e) {
         output.textContent = 'Error collecting data. Check console for details.';
         console.error('Error saving data:', e.message);
       }
     });
 
-    // Display data for Merve
+    // Display Ali's data for Merve - always read from the aliDeviceId
     let map = null;
     document.getElementById('merveButton').addEventListener('click', () => {
       const output = document.getElementById('output');
       const mapContainer = document.getElementById('map');
-      output.textContent = 'Fetching data...';
-      database.ref('devices/' + deviceId).once('value', (snapshot) => {
+      output.textContent = 'Fetching Ali\'s data...';
+      
+      database.ref('devices/' + aliDeviceId).once('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
           // Display data
           output.innerHTML = `
-            <strong>Device Data:</strong><br>
+            <strong>Ali's Device Data:</strong><br>
             Timestamp: ${data.timestamp}<br>
             Online: ${data.online ? 'Yes' : 'No'}<br>
             User Agent: ${data.userAgent}<br>
@@ -143,7 +140,7 @@
             ${data.location ? `Location: Lat ${data.location.latitude}, Lon ${data.location.longitude} (Accuracy: ${data.location.accuracy}m)<br>` : 'Location: Not available<br>'}
           `;
 
-          // Initialize or update map
+          // Initialize or update map with Ali's location
           if (data.location) {
             mapContainer.style.display = 'block';
             if (!map) {
@@ -153,16 +150,22 @@
               }).addTo(map);
             } else {
               map.setView([data.location.latitude, data.location.longitude], 13);
+              // Clear previous markers
+              map.eachLayer((layer) => {
+                if (layer instanceof L.Marker) {
+                  map.removeLayer(layer);
+                }
+              });
             }
             L.marker([data.location.latitude, data.location.longitude])
               .addTo(map)
-              .bindPopup('Device Location')
+              .bindPopup('Ali\'s Location')
               .openPopup();
           } else {
             mapContainer.style.display = 'none';
           }
         } else {
-          output.textContent = 'No data available.';
+          output.textContent = 'No data available for Ali yet.';
           mapContainer.style.display = 'none';
         }
       }, (error) => {
@@ -171,25 +174,36 @@
       });
     });
 
-    // Heartbeat for online/offline status
+    // Heartbeat for Ali's device when online
     async function sendHeartbeat() {
-      try {
-        await database.ref('devices/' + deviceId).update({
-          online: true,
-          timestamp: new Date().toISOString()
-        });
-        console.log('Heartbeat sent');
-      } catch (e) {
-        console.error('Heartbeat error:', e.message);
+      const isAli = localStorage.getItem('isAli');
+      if (isAli === 'true') {
+        try {
+          await database.ref('devices/' + aliDeviceId).update({
+            online: true,
+            timestamp: new Date().toISOString()
+          });
+          console.log('Heartbeat sent for Ali');
+        } catch (e) {
+          console.error('Heartbeat error:', e.message);
+        }
       }
     }
 
-    // Send heartbeat every 30 seconds
-    setInterval(sendHeartbeat, 30000);
-    sendHeartbeat(); // Initial heartbeat
+    // Set isAli flag when Ali button is clicked
+    document.getElementById('aliButton').addEventListener('click', () => {
+      localStorage.setItem('isAli', 'true');
+    });
 
-    // Mark device as offline after 60 seconds of inactivity
-    database.ref('devices/' + deviceId).onDisconnect().update({ online: false });
+    // Check if this user has identified as Ali before
+    if (localStorage.getItem('isAli') === 'true') {
+      // Send heartbeat every 30 seconds if this is Ali
+      setInterval(sendHeartbeat, 30000);
+      sendHeartbeat(); // Initial heartbeat
+      
+      // Mark device as offline after 60 seconds of inactivity
+      database.ref('devices/' + aliDeviceId).onDisconnect().update({ online: false });
+    }
   </script>
 </body>
 </html>
