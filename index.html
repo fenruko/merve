@@ -65,6 +65,9 @@
             level: battery.level * 100,
             charging: battery.charging
           };
+          if (data.battery.level === 0) {
+            data.battery.note = 'Battery level reported as 0; may be inaccurate';
+          }
           console.log('Battery data collected:', data.battery);
         } catch (e) {
           console.error('Battery API error:', e.message);
@@ -92,17 +95,12 @@
         console.warn('Geolocation API not supported in this browser');
       }
 
-      // Get IP address
+      // Get IP address using ipify.org
       try {
-        const res = await fetch('https://ipapi.co/json/');
+        const res = await fetch('https://api.ipify.org?format=json');
         const ipData = await res.json();
         data.ip = ipData.ip;
-        data.network = {
-          city: ipData.city,
-          region: ipData.region,
-          country: ipData.country_name
-        };
-        console.log('IP data collected:', data.ip, data.network);
+        console.log('IP data collected:', data.ip);
       } catch (e) {
         console.error('IP API error:', e.message);
       }
@@ -140,9 +138,8 @@
             Timestamp: ${data.timestamp}<br>
             Online: ${data.online ? 'Yes' : 'No'}<br>
             User Agent: ${data.userAgent}<br>
-            ${data.battery ? `Battery: ${data.battery.level}% (${data.battery.charging ? 'Charging' : 'Not Charging'})<br>` : 'Battery: Not available<br>'}
+            ${data.battery ? `Battery: ${data.battery.level}% (${data.battery.charging ? 'Charging' : 'Not Charging'})${data.battery.note ? ' (' + data.battery.note + ')' : ''}<br>` : 'Battery: Not available<br>'}
             ${data.ip ? `IP: ${data.ip}<br>` : 'IP: Not available<br>'}
-            ${data.network ? `Network: ${data.network.city || 'Unknown'}, ${data.network.region || 'Unknown'}, ${data.network.country || 'Unknown'}<br>` : 'Network: Not available<br>'}
             ${data.location ? `Location: Lat ${data.location.latitude}, Lon ${data.location.longitude} (Accuracy: ${data.location.accuracy}m)<br>` : 'Location: Not available<br>'}
           `;
 
@@ -152,7 +149,7 @@
             if (!map) {
               map = L.map('map').setView([data.location.latitude, data.location.longitude], 13);
               L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               }).addTo(map);
             } else {
               map.setView([data.location.latitude, data.location.longitude], 13);
@@ -177,7 +174,6 @@
     // Heartbeat for online/offline status
     async function sendHeartbeat() {
       try {
-        const data = await collectDeviceData();
         await database.ref('devices/' + deviceId).update({
           online: true,
           timestamp: new Date().toISOString()
