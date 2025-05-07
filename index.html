@@ -11,6 +11,9 @@
   <!-- Firebase Compatibility SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <!-- Leaflet CSS and JS for map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
   <div class="bg-white p-6 rounded-lg shadow-lg text-center">
@@ -20,10 +23,11 @@
       <button id="merveButton" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Merve</button>
     </div>
     <div id="output" class="mt-4 text-gray-700"></div>
+    <div id="map" class="mt-4" style="height: 300px; display: none;"></div>
   </div>
 
   <script>
-    // Firebase configuration (replace with your Firebase project config)
+    // Firebase configuration
     const firebaseConfig = {
       apiKey: "AIzaSyDJ-bZC46FWBzevyhTA_H1Lq9FJ1_elNnw",
       authDomain: "location-442c7.firebaseapp.com",
@@ -32,7 +36,7 @@
       storageBucket: "location-442c7.firebasestorage.app",
       messagingSenderId: "845259581953",
       appId: "1:845259581953:web:4c9c0ea03c70f5419eee00"
-   };
+    };
 
     // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
@@ -61,25 +65,31 @@
             level: battery.level * 100,
             charging: battery.charging
           };
+          console.log('Battery data collected:', data.battery);
         } catch (e) {
-          console.error('Battery API error:', e);
+          console.error('Battery API error:', e.message);
         }
+      } else {
+        console.warn('Battery API not supported in this browser');
       }
 
       // Get geolocation
       if (navigator.geolocation) {
         try {
           const position = await new Promise((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
           });
           data.location = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy
           };
+          console.log('Geolocation data collected:', data.location);
         } catch (e) {
-          console.error('Geolocation error:', e);
+          console.error('Geolocation error:', e.message);
         }
+      } else {
+        console.warn('Geolocation API not supported in this browser');
       }
 
       // Get IP address
@@ -92,8 +102,9 @@
           region: ipData.region,
           country: ipData.country_name
         };
+        console.log('IP data collected:', data.ip, data.network);
       } catch (e) {
-        console.error('IP API error:', e);
+        console.error('IP API error:', e.message);
       }
 
       return data;
@@ -103,41 +114,78 @@
     document.getElementById('aliButton').addEventListener('click', async () => {
       const output = document.getElementById('output');
       output.textContent = 'Collecting data...';
-      const data = await collectDeviceData();
-      await database.ref('devices/' + deviceId).set(data);
-      output.textContent = 'Your data has been recorded.';
+      try {
+        const data = await collectDeviceData();
+        await database.ref('devices/' + deviceId).set(data);
+        output.textContent = 'Your data has been recorded.';
+        console.log('Data saved to Firebase:', data);
+      } catch (e) {
+        output.textContent = 'Error collecting data. Check console for details.';
+        console.error('Error saving data:', e.message);
+      }
     });
 
     // Display data for Merve
+    let map = null;
     document.getElementById('merveButton').addEventListener('click', () => {
       const output = document.getElementById('output');
+      const mapContainer = document.getElementById('map');
       output.textContent = 'Fetching data...';
       database.ref('devices/' + deviceId).once('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
+          // Display data
           output.innerHTML = `
             <strong>Device Data:</strong><br>
             Timestamp: ${data.timestamp}<br>
-            Online: ${data.online ? 'Yes' : 'No'}<  <br>
+            Online: ${data.online ? 'Yes' : 'No'}<br>
             User Agent: ${data.userAgent}<br>
-            ${data.battery ? `Battery: ${data.battery.level}% (${data.battery.charging ? 'Charging' : 'Not Charging'})<br>` : ''}
-            ${data.location ? `Location: Lat ${data.location.latitude}, Lon ${data.location.longitude} (Accuracy: ${data.location.accuracy}m)<br>` : ''}
-            ${data.ip ? `IP: ${data.ip}<br>` : ''}
-            ${data.network ? `Network: ${data.network.city}, ${data.network.region}, ${data.network.country}<br>` : ''}
+            ${data.battery ? `Battery: ${data.battery.level}% (${data.battery.charging ? 'Charging' : 'Not Charging'})<br>` : 'Battery: Not available<br>'}
+            ${data.ip ? `IP: ${data.ip}<br>` : 'IP: Not available<br>'}
+            ${data.network ? `Network: ${data.network.city || 'Unknown'}, ${data.network.region || 'Unknown'}, ${data.network.country || 'Unknown'}<br>` : 'Network: Not available<br>'}
+            ${data.location ? `Location: Lat ${data.location.latitude}, Lon ${data.location.longitude} (Accuracy: ${data.location.accuracy}m)<br>` : 'Location: Not available<br>'}
           `;
+
+          // Initialize or update map
+          if (data.location) {
+            mapContainer.style.display = 'block';
+            if (!map) {
+              map = L.map('map').setView([data.location.latitude, data.location.longitude], 13);
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              }).addTo(map);
+            } else {
+              map.setView([data.location.latitude, data.location.longitude], 13);
+            }
+            L.marker([data.location.latitude, data.location.longitude])
+              .addTo(map)
+              .bindPopup('Device Location')
+              .openPopup();
+          } else {
+            mapContainer.style.display = 'none';
+          }
         } else {
           output.textContent = 'No data available.';
+          mapContainer.style.display = 'none';
         }
+      }, (error) => {
+        output.textContent = 'Error fetching data. Check console for details.';
+        console.error('Firebase read error:', error.message);
       });
     });
 
     // Heartbeat for online/offline status
     async function sendHeartbeat() {
-      const data = await collectDeviceData();
-      database.ref('devices/' + deviceId).update({
-        online: true,
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const data = await collectDeviceData();
+        await database.ref('devices/' + deviceId).update({
+          online: true,
+          timestamp: new Date().toISOString()
+        });
+        console.log('Heartbeat sent');
+      } catch (e) {
+        console.error('Heartbeat error:', e.message);
+      }
     }
 
     // Send heartbeat every 30 seconds
@@ -146,13 +194,6 @@
 
     // Mark device as offline after 60 seconds of inactivity
     database.ref('devices/' + deviceId).onDisconnect().update({ online: false });
-
-    // Register Service Worker for background tasks
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(() => {
-        console.log('Service Worker registered');
-      }).catch(e => console.error('Service Worker error:', e));
-    }
   </script>
 </body>
 </html>
